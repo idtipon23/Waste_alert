@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ตรวจสอบข่าวก่อนแสดงบนแผนที่</title>
+<style>
+  :root{font-family:system-ui,"Noto Sans Thai",sans-serif;color:#202124;background:#f5f6f8}
+  *{box-sizing:border-box}
+  body{margin:0}
+  header{background:#fff;border-bottom:1px solid #ddd;padding:14px 20px}
+  header h1{font-size:20px;margin:0 0 4px}
+  header p{margin:0;color:#666;font-size:13px}
+  main{max-width:900px;margin:20px auto;padding:0 14px}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  #count{font-weight:600}
+  a{color:#1565c0}
+  button{font:inherit;padding:8px 12px;border:0;border-radius:5px;cursor:pointer}
+  button:disabled{opacity:.55;cursor:wait}
+  .refresh{background:#e8eaed;color:#202124}
+  .card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}
+  .card h2{font-size:17px;margin:0 0 6px}
+  .meta{font-size:13px;color:#555;margin:4px 0}
+  .summary{line-height:1.55;margin:10px 0}
+  .tags{color:#8a3b00;font-size:13px}
+  .notice,.error,.empty{padding:12px;border-radius:6px;margin:12px 0}
+  .notice{background:#fff8e1;color:#684d00}
+  .error{background:#ffebee;color:#8e0000}
+  .empty{background:#e8f5e9;color:#1b5e20}
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .approve{background:#2e7d32;color:#fff}
+  .reject{background:#b71c1c;color:#fff}
+  @media(max-width:600px){header{padding:12px}main{margin:12px auto}.actions button{flex:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ตรวจข่าวก่อนแสดงบนแผนที่</h1>
+  <p>ตรวจเนื้อหา แหล่งข่าว และตำแหน่งก่อนอนุมัติ ข่าวที่อนุมัติจะแสดงเป็นจุดข่าวบนแผนที่</p>
+</header>
+<main>
+  <div class="notice">ข่าวเป็นข้อมูลตามรายงานของแหล่งข่าว ไม่ใช่ผลตรวจหรือการยืนยันอย่างเป็นทางการ ตำแหน่งอาจเป็นการประมาณระดับตำบล อำเภอ หรือจังหวัด</div>
+  <div class="toolbar">
+    <div id="count">กำลังโหลดข่าว...</div>
+    <button class="refresh" id="refresh" type="button">โหลดใหม่</button>
+  </div>
+  <div id="message" aria-live="polite"></div>
+  <section id="items"></section>
+  <p><a href="./">กลับไปหน้าแผนที่</a></p>
+</main>
+<script>
+const TAG_LABEL = {
+  unlicensed: "รายงานว่าไม่มีใบอนุญาต",
+  stop_order: "รายงานว่ามีคำสั่งหยุดกิจการ",
+  illegal_dumping: "รายงานการลักลอบทิ้ง",
+  inspection_violations: "รายงานผลตรวจพบการฝ่าฝืน",
+  disputed: "มีรายงานภายหลังว่าไม่พบเหตุตามข่าว"
+};
+const $ = id => document.getElementById(id);
+
+function addText(parent, tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  el.textContent = text || "-";
+  parent.appendChild(el);
+  return el;
+}
+
+function addLink(parent, url, label) {
+  if (!/^https?:\/\//i.test(url || "")) return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.textContent = label;
+  parent.appendChild(a);
+}
+
+function renderItem(item) {
+  const card = document.createElement("article");
+  card.className = "card";
+  addText(card, "h2", "", `ข่าว #${item.id}: ${item.title}`);
+  addText(card, "div", "meta", `แหล่งข่าว: ${item.source_name || "ไม่ระบุ"} | วันที่ตามข่าว: ${item.event_date || "ไม่ระบุ"}`);
+  addText(card, "div", "meta", `ที่ตั้ง: ${[item.tambon && "ต." + item.tambon, item.amphoe && "อ." + item.amphoe, item.province && "จ." + item.province].filter(Boolean).join(" ") || "ไม่ระบุ"}`);
+  addText(card, "div", "meta", `ความแม่นตำแหน่ง: ${item.precision_th || "ไม่ระบุ"}${item.lat == null || item.lng == null ? " (ยังไม่มีพิกัด)" : ""}`);
+  addText(card, "p", "summary", item.summary);
+  addText(card, "div", "meta", `ชนิดสารที่ข่าวระบุ: ${item.substances && item.substances.length ? item.substances.join(", ") : "ไม่ระบุ"}`);
+  const tags = (item.tags || []).map(tag => TAG_LABEL[tag] || tag);
+  if (tags.length) addText(card, "div", "tags", "ป้าย: " + tags.join(" | "));
+  const source = document.createElement("p");
+  source.className = "meta";
+  addLink(source, item.source_url, "เปิดข่าวต้นทาง");
+  card.appendChild(source);
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const approve = document.createElement("button");
+  approve.className = "approve";
+  approve.type = "button";
+  approve.textContent = "อนุมัติและแสดงบนแผนที่";
+  approve.disabled = item.lat == null || item.lng == null;
+  approve.addEventListener("click", () => updateStatus(item.id, "approve"));
+  actions.appendChild(approve);
+
+  const reject = document.createElement("button");
+  reject.className = "reject";
+  reject.type = "button";
+  reject.textContent = "ปฏิเสธ (ไม่แสดง)";
+  reject.addEventListener("click", () => updateStatus(item.id, "reject"));
+  actions.appendChild(reject);
+  card.appendChild(actions);
+  return card;
+}
+
+async function loadItems() {
+  $("message").replaceChildren();
+  $("count").textContent = "กำลังโหลดข่าว...";
+  $("items").replaceChildren();
+  try {
+    const response = await fetch("/api/review", {cache: "no-store"});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `โหลดข่าวไม่สำเร็จ (${response.status})`);
+    $("count").textContent = `ข่าวรอตรวจ ${result.items.length} รายการ`;
+    if (!result.items.length) {
+      addText($("items"), "div", "empty", "ไม่มีข่าวที่รอตรวจในขณะนี้");
+      return;
+    }
+    result.items.forEach(item => $("items").appendChild(renderItem(item)));
+  } catch (error) {
+    addText($("message"), "div", "error", error.message);
+    $("count").textContent = "โหลดรายการข่าวไม่ได้";
+  }
+}
+
+async function updateStatus(id, action) {
+  const verb = action === "approve" ? "อนุมัติและแสดงข่าวนี้บนแผนที่" : "ปฏิเสธข่าวนี้";
+  if (!window.confirm(`${verb}?`)) return;
+  try {
+    const response = await fetch(`/api/review/${id}/${action}`, {method: "POST"});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `บันทึกไม่สำเร็จ (${response.status})`);
+    await loadItems();
+  } catch (error) {
+    addText($("message"), "div", "error", error.message);
+  }
+}
+
+$("refresh").addEventListener("click", loadItems);
+loadItems();
+</script>
+</body>
+</html>

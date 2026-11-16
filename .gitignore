@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+key.txt
+web/config.js
+!web/config.js.example
+monitor.db
+*.db-journal
+results_*.jsonl
+seen_links.txt
+__pycache__/
+*.py[cod]

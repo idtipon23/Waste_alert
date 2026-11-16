@@ -1,0 +1,45 @@
+name: Check DIW factory registry
+
+on:
+  schedule:
+    - cron: "0 17 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scan-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tracker dependency
+        run: python -m pip install requests
+
+      - name: Compare with the last reviewed registry snapshot
+        run: python factory_registry_tracker.py
+
+      - name: Open or update review pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "data: check DIW factory registry"
+          branch: automation/factory-registry
+          delete-branch: true
+          title: "ตรวจรายการโรงงานของเสียที่เพิ่มในทะเบียน DIW"
+          body: |
+            ตรวจรายการใหม่ในทะเบียนโรงงานจำพวกที่ 3 ของกรมโรงงานอุตสาหกรรม
+
+            รายการในรายงานหมายถึงเพิ่งพบในทะเบียนเมื่อเทียบกับ snapshot ที่ตรวจทานแล้ว
+            ไม่ใช่การยืนยันว่าโรงงานกำลังก่อสร้าง และข้อมูลต้นทางไม่มีพิกัด
+          add-paths: |
+            data/factory_registry_seen_ids.json
+            reports/factory-registry/*.json

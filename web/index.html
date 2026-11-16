@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แผนที่โรงงานจัดการของเสีย (ทะเบียนกรมโรงงานฯ)</title>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,"Noto Sans Thai",sans-serif}
+  #wrap{display:flex;height:100%}
+  #side{width:340px;overflow:auto;padding:12px;box-sizing:border-box;border-right:1px solid #ddd;font-size:14px}
+  #map{flex:1;min-height:300px}
+  h1{font-size:17px;margin:0 0 8px}
+  .note{background:#fff8e1;border:1px solid #ffe082;padding:8px;border-radius:6px;font-size:12.5px;margin-bottom:10px}
+  fieldset{border:1px solid #ddd;border-radius:6px;margin:0 0 10px;padding:8px}
+  legend{font-weight:600;font-size:13px}
+  label{display:block;margin:3px 0}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  button,select{font-size:14px;padding:5px 8px;margin:2px 0}
+  .news-callout-layer{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none}
+  .news-callout{position:absolute;width:170px;height:24px;padding:2px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    border:1px solid;border-radius:4px;background:#fff;box-shadow:0 1px 4px #0004;font:600 11px/18px system-ui,"Noto Sans Thai",sans-serif;
+    text-align:left;cursor:pointer;pointer-events:auto}
+  #list div{padding:6px 0;border-bottom:1px solid #eee;cursor:pointer}
+  #list small{color:#666}
+  .warn{color:#b26a00}
+  @media(max-width:700px){#wrap{flex-direction:column-reverse}#side{width:auto;height:45%;border-right:0;border-top:1px solid #ddd}}
+</style>
+<script src="config.js"></script>
+<script src="https://unpkg.com/@googlemaps/markerclusterer@2.5.3/dist/index.min.js"></script>
+</head>
+<body>
+<div id="wrap">
+  <div id="side">
+    <h1>โรงงานจัดการของเสีย ตามทะเบียนกรมโรงงานฯ</h1>
+    <div class="note">ข้อมูลนี้คือ <b>โรงงานที่มีทะเบียน</b> (ประเภท 101/105/106) การมีจุดบนแผนที่
+      <b>ไม่ได้หมายถึงว่ามีปัญหา</b> ตำแหน่งแปลงจากที่อยู่ จุดวงโปร่งคือตำแหน่งโดยประมาณระดับตำบล
+      ข้อมูลทะเบียนเป็นไฟล์ ณ วันที่ดาวน์โหลด ไม่อัปเดตอัตโนมัติ</div>
+
+    <fieldset><legend>ประเภท</legend><div id="types"></div></fieldset>
+    <fieldset><legend>ความแม่นของตำแหน่ง</legend>
+      <label><input type="checkbox" id="showExact" checked> จุดละเอียด (วงทึบ)</label>
+      <label><input type="checkbox" id="showApprox" checked> จุดประมาณระดับตำบล (วงโปร่ง)</label>
+    </fieldset>
+    <fieldset><legend>ปีที่ได้รับอนุญาต</legend>
+      <label><input type="checkbox" id="newOnly"> เฉพาะที่ได้รับอนุญาตใหม่ (พ.ศ. 2568 ขึ้นไป)</label>
+      <div style="font-size:12px;color:#666">ตามทะเบียนที่มีใบอนุญาตแล้วเท่านั้น ไม่รวมโรงงานที่อยู่ระหว่างขออนุญาตหรือไม่มีใบอนุญาต</div>
+    </fieldset>
+    <fieldset><legend>จุดรายงานข่าว</legend>
+      <label><input type="checkbox" id="showInc" checked> <span class="dot" style="background:#c62828;border-radius:2px;transform:rotate(45deg)"></span>แสดงจุดรายงานข่าว (<span id="incCount">0</span>)</label>
+      <label><input type="checkbox" id="showIncLabels" checked> แสดงหัวข่าวขนาดเล็กเหนือจุด</label>
+      <div style="font-size:12px;color:#666">เป็นข้อมูลตามรายงานข่าว ผ่านการตรวจโดยผู้ดูแลก่อนขึ้นแผนที่ ไม่ใช่ผลตรวจหรือการยืนยันอย่างเป็นทางการ
+        <br><span class="dot" style="background:#757575;border-radius:2px;transform:rotate(45deg)"></span>สีเทา = ภายหลังมีรายงานว่าไม่พบเหตุตามข่าว</div>
+    </fieldset>
+    <div id="count"></div>
+    <p><a href="review.html">ตรวจข่าวและเลือกอนุมัติ/ปฏิเสธ</a></p>
+
+    <fieldset><legend>ดูโรงงานในรัศมี</legend>
+      <div>แตะแผนที่เพื่อปักตำแหน่ง หรือ <button id="locate">ใช้ตำแหน่งของฉัน</button></div>
+      <div>รัศมี <select id="radius">
+        <option value="1">1 กม.</option><option value="3">3 กม.</option>
+        <option value="5" selected>5 กม.</option><option value="10">10 กม.</option></select>
+        <button id="clear">ล้างจุด</button></div>
+      <div id="nearSummary" style="margin-top:6px"></div>
+      <div id="list"></div>
+    </fieldset>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+const TYPES = {
+  "10100": {label: "101 ปรับคุณภาพของเสียรวม", color: "#7e57c2"},
+  "10500": {label: "105 คัดแยก/ฝังกลบ",       color: "#ef6c00"},
+  "10600": {label: "106 รีไซเคิลของเสีย",      color: "#00897b"}
+};
+const EXACT = ["ROOFTOP", "RANGE_INTERPOLATED"];
+const NEW_FROM = 2568;   // พ.ศ.
+const TAG_LABEL = {
+  unlicensed: "ตามรายงานข่าวว่าหน่วยงานรัฐพบหรือแถลงว่าไม่มีใบอนุญาต",
+  stop_order: "ตามรายงานข่าวว่าทางการสั่งหยุดหรือระงับกิจการ",
+  illegal_dumping: "ตามรายงานข่าวว่าเป็นการลักลอบทิ้ง",
+  inspection_violations: "ตามรายงานข่าวว่าผลตรวจของหน่วยงานรัฐพบการฝ่าฝืน",
+  disputed: "มีรายงานภายหลังว่าไม่พบเหตุตามที่เป็นข่าว หรือข้อกล่าวอ้างไม่เป็นความจริง"
+};
+let map, all = [], incidents = [], clusterer, info, pin = null, circle = null;
+
+const $ = id => document.getElementById(id);
+const isExact = f => EXACT.includes(f.precision);
+const isDisputed = f => (f.tags || []).includes("disputed");
+
+function haversineKm(a, b, c, d) {
+  const R = 6371, r = x => x * Math.PI / 180;
+  const dLat = r(c - a), dLng = r(d - b);
+  const h = Math.sin(dLat/2)**2 + Math.cos(r(a))*Math.cos(r(c))*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function icon(f) {
+  const color = (TYPES[f.type_code] || {color: "#555"}).color;
+  return {path: google.maps.SymbolPath.CIRCLE, scale: 6, strokeColor: color, strokeWeight: 2,
+          fillColor: color, fillOpacity: isExact(f) ? 0.9 : 0.12};
+}
+
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : null;
+const showInc = () => $("showInc").checked;
+
+function incIcon(f) {
+  const c = isDisputed(f) ? "#757575" : "#c62828";
+  return {path: "M 0,-9 L 9,0 L 0,9 L -9,0 z", scale: 1, strokeColor: c, strokeWeight: 2,
+          fillColor: c, fillOpacity: f.precision === "point" ? 0.9 : 0.25};
+}
+
+function incContent(f) {
+  const box = document.createElement("div");
+  box.style.maxWidth = "360px"; box.style.fontSize = "15px"; box.style.lineHeight = "1.5";
+  const t = document.createElement("div");
+  t.style.cssText = "font-weight:700;font-size:16px;margin-bottom:6px";
+  t.textContent = f.title; box.appendChild(t);
+  row(box, "ที่ตั้ง:", [f.tambon && "ต." + f.tambon, f.amphoe && "อ." + f.amphoe, f.province && "จ." + f.province].filter(Boolean).join(" "));
+  row(box, "วันที่ (ตามข่าว):", f.event_date);
+  row(box, "ชนิดสารที่ข่าวระบุ:", (f.substances && f.substances.length) ? f.substances.join(", ") : "ไม่ระบุชนิดสาร");
+  row(box, "ความแม่นตำแหน่ง:", f.precision_th);
+  (f.tags || []).filter(t => TAG_LABEL[t]).forEach(t => {
+    const g = document.createElement("div");
+    g.style.cssText = "margin-top:4px;font-weight:600;color:" + (t === "disputed" ? "#555" : "#b71c1c");
+    g.textContent = "⚑ " + TAG_LABEL[t]; box.appendChild(g);
+  });
+  if (f.summary) { const p = document.createElement("div"); p.style.marginTop = "6px"; p.textContent = f.summary; box.appendChild(p); }
+  const u = safeUrl(f.source_url);
+  if (u) {
+    const d = document.createElement("div"); d.style.marginTop = "6px";
+    const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer";
+    a.textContent = "อ่านข่าวต้นทาง" + (f.source_name ? " (" + f.source_name + ")" : ""); d.appendChild(a); box.appendChild(d);
+  }
+  const n = document.createElement("div"); n.style.cssText = "margin-top:6px;color:#8a5a00;font-size:12px";
+  n.textContent = "ตามรายงานข่าว ยังไม่ใช่ผลตรวจหรือการยืนยันอย่างเป็นทางการ ตำแหน่งอาจเป็นการประมาณ";
+  box.appendChild(n);
+  return box;
+}
+
+function row(parent, label, value) {
+  const d = document.createElement("div");
+  const b = document.createElement("b"); b.textContent = label + " ";
+  d.append(b, document.createTextNode(value || "-"));
+  parent.appendChild(d);
+}
+
+function infoContent(f) {
+  const box = document.createElement("div");
+  box.style.maxWidth = "280px"; box.style.fontSize = "13px";
+  const t = document.createElement("div");
+  t.style.fontWeight = "700"; t.textContent = f.name; box.appendChild(t);
+  row(box, "ประเภท:", f.type_label);
+  row(box, "กิจการ:", f.activity);
+  row(box, "ที่ตั้ง:", `ต.${f.tambon} อ.${f.amphoe} จ.${f.province}`);
+  row(box, "ปีที่อนุญาต (พ.ศ.):", f.year_be);
+  row(box, "ความแม่นตำแหน่ง:", f.precision_th);
+  const n = document.createElement("div");
+  n.style.cssText = "margin-top:6px;color:#8a5a00;font-size:12px";
+  n.textContent = "ข้อมูลจากทะเบียนกรมโรงงานฯ การมีจุดนี้ไม่ได้หมายถึงว่ามีปัญหา" +
+    (isExact(f) ? "" : " ตำแหน่งนี้เป็นการประมาณ อาจคลาดเคลื่อนได้ระดับตำบล");
+  box.appendChild(n);
+  return box;
+}
+
+function visible(f) {
+  const types = [...document.querySelectorAll(".typeChk:checked")].map(x => x.value);
+  if (!types.includes(f.type_code)) return false;
+  if ($("newOnly").checked && !(f.year_be >= NEW_FROM)) return false;
+  return isExact(f) ? $("showExact").checked : $("showApprox").checked;
+}
+
+function apply() {
+  const vis = all.filter(visible);
+  clusterer.clearMarkers();
+  clusterer.addMarkers(vis.map(f => f.marker));
+  $("count").textContent = `แสดง ${vis.length.toLocaleString()} จาก ${all.length.toLocaleString()} แห่ง`;
+  updateNear();
+}
+
+function setPin(latlng) {
+  if (pin) pin.setMap(null);
+  pin = new google.maps.Marker({position: latlng, map, title: "ตำแหน่งที่เลือก", zIndex: 999});
+  updateNear();
+}
+
+function updateNear() {
+  if (circle) { circle.setMap(null); circle = null; }
+  $("list").innerHTML = ""; $("nearSummary").textContent = "";
+  if (!pin) return;
+  const p = pin.getPosition(), km = Number($("radius").value);
+  circle = new google.maps.Circle({map, center: p, radius: km * 1000, strokeColor: "#1565c0",
+                                   fillColor: "#1565c0", fillOpacity: 0.07, clickable: false});
+  const near = all.filter(visible)
+    .map(f => ({f, d: haversineKm(p.lat(), p.lng(), f.lat, f.lng)}))
+    .filter(x => x.d <= km).sort((a, b) => a.d - b.d);
+  const approx = near.filter(x => !isExact(x.f)).length;
+  const nearInc = showInc() ? incidents.map(f => ({f, d: haversineKm(p.lat(), p.lng(), f.lat, f.lng)})).filter(x => x.d <= km).sort((a, b) => a.d - b.d) : [];
+  $("nearSummary").innerHTML = `พบ <b>${near.length}</b> แห่งในรัศมี ${km} กม.` +
+    (nearInc.length ? `<br><b style="color:#c62828">มีจุดรายงานข่าว ${nearInc.length} จุดในรัศมีนี้</b>` : "") +
+    (approx ? `<br><span class="warn">รวม ${approx} แห่งที่เป็นตำแหน่งประมาณ ระยะจริงอาจต่างได้ระดับตำบล</span>` : "");
+  nearInc.forEach(({f, d}) => {
+    const div = document.createElement("div"); div.textContent = "◆ " + f.title;
+    const s = document.createElement("small");
+    s.textContent = `${d.toFixed(1)} กม. | รายงานข่าว${isDisputed(f) ? " | ภายหลังรายงานว่าไม่พบเหตุ" : ""}${f.precision === "point" ? "" : " | ตำแหน่งประมาณ"}`;
+    div.appendChild(document.createElement("br")); div.appendChild(s);
+    div.onclick = () => { map.panTo({lat: f.lat, lng: f.lng}); info.setContent(incContent(f)); info.open(map, f.marker); };
+    $("list").appendChild(div);
+  });
+  near.slice(0, 50).forEach(({f, d}) => {
+    const div = document.createElement("div");
+    div.textContent = f.name;
+    const s = document.createElement("small");
+    s.textContent = `${d.toFixed(1)} กม. | ${f.type_label}${isExact(f) ? "" : " | ตำแหน่งประมาณ"}`;
+    div.appendChild(document.createElement("br")); div.appendChild(s);
+    div.onclick = () => { map.panTo({lat: f.lat, lng: f.lng}); info.setContent(infoContent(f)); info.open(map, f.marker); };
+    $("list").appendChild(div);
+  });
+  if (near.length > 50) {
+    const m = document.createElement("small"); m.textContent = `แสดง 50 แห่งแรกจาก ${near.length}`; $("list").appendChild(m);
+  }
+}
+
+async function initMap() {
+  map = new google.maps.Map($("map"), {center: {lat: 13.3, lng: 101.2}, zoom: 7,
+                                       streetViewControl: false, mapTypeControl: true});
+  info = new google.maps.InfoWindow();
+  clusterer = new markerClusterer.MarkerClusterer({map, markers: []});
+
+  Object.entries(TYPES).forEach(([code, t]) => {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox" class="typeChk" value="${code}" checked>
+                   <span class="dot" style="background:${t.color}"></span>`;
+    l.appendChild(document.createTextNode(t.label));
+    $("types").appendChild(l);
+  });
+
+  try {
+    all = await (await fetch("data/factories.json", {cache: "no-cache"})).json();
+  } catch (e) {
+    $("count").textContent = "โหลด data/factories.json ไม่ได้ ต้องเปิดผ่าน python -m http.server ไม่ใช่ดับเบิลคลิกไฟล์";
+    return;
+  }
+  try { incidents = await (await fetch("data/incidents.json", {cache: "no-cache"})).json(); } catch (e) { incidents = []; }
+
+  class NewsCalloutLayer extends google.maps.OverlayView {
+    constructor(records) {
+      super();
+      this.records = records;
+      this.layer = null;
+    }
+    onAdd() {
+      this.layer = document.createElement("div");
+      this.layer.className = "news-callout-layer";
+      this.getPanes().overlayMouseTarget.appendChild(this.layer);
+    }
+    draw() {
+      if (!this.layer) return;
+      this.layer.replaceChildren();
+      const projection = this.getProjection();
+      const bounds = $("map").getBoundingClientRect();
+      const centerX = bounds.width/2, centerY = bounds.height/2;
+      const width = 170, height = 24, placed = [];
+      this.records.forEach(f => {
+        const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(f.lat, f.lng));
+        if (!point || point.x < -centerX || point.y < -centerY || point.x > centerX || point.y > centerY) return;
+        const left = Math.max(-centerX+2, Math.min(centerX-width-2, point.x-width/2));
+        let top = Math.max(-centerY+2, point.y-height-9);
+        while (placed.some(r => left < r.right && left+width > r.left && top < r.bottom && top+height > r.top)) {
+          top -= height + 3;
+        }
+        top = Math.max(-centerY+2, top);
+        placed.push({left,top,right:left+width,bottom:top+height});
+        const color = isDisputed(f) ? "#757575" : "#c62828";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "news-callout";
+        button.style.cssText = `left:${left}px;top:${top}px;border-color:${color};color:${color}`;
+        const chars = Array.from(f.title || "ข่าว");
+        button.textContent = chars.length > 30 ? chars.slice(0,30).join("") + "…" : chars.join("");
+        button.title = f.title || "";
+        button.setAttribute("aria-label", `เปิดรายละเอียดข่าว: ${f.title || "ข่าว"}`);
+        button.addEventListener("click", e => {
+          e.stopPropagation();
+          info.setContent(incContent(f));
+          info.open(map, f.marker);
+        });
+        this.layer.appendChild(button);
+      });
+    }
+    onRemove() {
+      if (this.layer) this.layer.remove();
+      this.layer = null;
+    }
+  }
+
+  incidents.forEach(f => {
+    f.marker = new google.maps.Marker({position: {lat: f.lat, lng: f.lng}, map, icon: incIcon(f), title: f.title, zIndex: 500});
+    f.marker.addListener("click", () => { info.setContent(incContent(f)); info.open(map, f.marker); });
+  });
+  const callouts = new NewsCalloutLayer(incidents);
+  if ($("showInc").checked && $("showIncLabels").checked) callouts.setMap(map);
+  $("incCount").textContent = incidents.length;
+  $("showInc").addEventListener("change", () => {
+    incidents.forEach(f => f.marker.setMap(showInc() ? map : null));
+    callouts.setMap(showInc() && $("showIncLabels").checked ? map : null);
+    updateNear();
+  });
+  $("showIncLabels").addEventListener("change", () =>
+    callouts.setMap(showInc() && $("showIncLabels").checked ? map : null));
+  all.forEach(f => {
+    f.marker = new google.maps.Marker({position: {lat: f.lat, lng: f.lng}, icon: icon(f), title: f.name});
+    f.marker.addListener("click", () => { info.setContent(infoContent(f)); info.open(map, f.marker); });
+  });
+
+  document.querySelectorAll(".typeChk,#showExact,#showApprox,#newOnly").forEach(el => el.addEventListener("change", apply));
+  $("radius").onchange = updateNear;
+  $("clear").onclick = () => { if (pin) pin.setMap(null); pin = null; updateNear(); };
+  $("locate").onclick = () => navigator.geolocation
+    ? navigator.geolocation.getCurrentPosition(
+        p => { const ll = new google.maps.LatLng(p.coords.latitude, p.coords.longitude); setPin(ll); map.setCenter(ll); map.setZoom(12); },
+        () => alert("ขอตำแหน่งไม่ได้ ลองแตะบนแผนที่แทน"))
+    : alert("เบราว์เซอร์นี้ไม่รองรับการขอตำแหน่ง");
+  map.addListener("click", e => setPin(e.latLng));
+  apply();
+}
+window.initMap = initMap;
+window.gm_authFailure = () => { $("count").textContent = "Maps key ใช้ไม่ได้ ตรวจว่าเปิด Maps JavaScript API แล้ว และข้อจำกัดโดเมนตรงกับที่อยู่ที่เปิดอยู่"; };
+(function () {
+  if (!window.MAPS_KEY || /ใส่/.test(window.MAPS_KEY)) { $("count").textContent = "ยังไม่ได้ใส่ Maps key ในไฟล์ config.js"; return; }
+  const sc = document.createElement("script"); sc.async = true;
+  sc.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(window.MAPS_KEY) + "&callback=initMap&language=th&region=TH";
+  document.head.appendChild(sc);
+})();
+</script>
+</body>
+</html>
