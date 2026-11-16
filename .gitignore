@@ -6,6 +6,8 @@ web/config.js
 !web/config.js.example
 monitor.db
 *.db-journal
+dist/
+site_build/
 results_*.jsonl
 seen_links.txt
 __pycache__/

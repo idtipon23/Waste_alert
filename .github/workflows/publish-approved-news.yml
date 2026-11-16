@@ -1,0 +1,61 @@
+name: Publish approved news
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - data/news_review_queue.json
+      - news_review_pipeline.py
+      - monitor_core.py
+      - factories_v3.json
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency
+        run: python -m pip install requests
+
+      - name: Publish approved queue items
+        run: python news_review_pipeline.py publish
+
+      - name: Commit approved map data
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f data/news_review_queue.json ]; then
+            git add data/news_review_queue.json
+          fi
+          git add web/data/incidents.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No approved map changes."
+            exit 0
+          fi
+          git commit -m "map: publish approved news" \
+            -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Start map deployment
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --ref main
