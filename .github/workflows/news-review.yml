@@ -15,13 +15,13 @@ concurrency:
 
 jobs:
   collect-news:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Skip while a review pull request is open
         id: pending-pr
@@ -40,7 +40,7 @@ jobs:
 
       - name: Set up Python
         if: steps.pending-pr.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.12"
 
@@ -61,7 +61,7 @@ jobs:
 
       - name: Open a review pull request
         if: steps.pending-pr.outputs.skip != 'true' && steps.collect.outputs.added != '0'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8.1.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "news: add candidates for review"

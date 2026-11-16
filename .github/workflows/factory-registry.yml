@@ -11,13 +11,13 @@ permissions:
 
 jobs:
   scan-registry:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.12"
 
@@ -28,7 +28,7 @@ jobs:
         run: python factory_registry_tracker.py
 
       - name: Open or update review pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8.1.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "data: check DIW factory registry"
