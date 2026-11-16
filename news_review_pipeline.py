@@ -109,6 +109,9 @@ def _to_review_record(candidate):
 
 
 def collect_candidates(results_path=RESULTS_PATH, queue_path=QUEUE_PATH, incidents_path=INCIDENTS_PATH):
+    results_path = Path(results_path)
+    queue_path = Path(queue_path)
+    incidents_path = Path(incidents_path)
     queue = _queue_data(queue_path)
     incidents = _read_json(incidents_path, [])
     known_urls = {
@@ -185,6 +188,9 @@ def publish_approved(
     incidents_path=INCIDENTS_PATH,
     factories_path=FACTORIES_PATH,
 ):
+    queue_path = Path(queue_path)
+    incidents_path = Path(incidents_path)
+    factories_path = Path(factories_path)
     queue = _queue_data(queue_path)
     incidents = _read_json(incidents_path, [])
     known_urls = {

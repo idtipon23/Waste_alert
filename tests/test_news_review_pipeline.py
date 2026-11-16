@@ -41,7 +41,7 @@ class NewsReviewPipelineTests(unittest.TestCase):
             )
             incidents.write_text("[]", encoding="utf-8")
 
-            added = collect_candidates(results, queue, incidents)
+            added = collect_candidates(str(results), str(queue), str(incidents))
 
             self.assertEqual(added, 1)
             stored = json.loads(queue.read_text(encoding="utf-8"))
@@ -87,7 +87,7 @@ class NewsReviewPipelineTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            published = publish_approved(queue, incidents, factories)
+            published = publish_approved(str(queue), str(incidents), str(factories))
 
             self.assertEqual(published, 1)
             map_records = json.loads(incidents.read_text(encoding="utf-8"))
